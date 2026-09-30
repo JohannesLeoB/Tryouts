@@ -144,11 +144,98 @@ func (g *grid) savePNG(path string, scale int) error {
 	return png.Encode(f, img)
 }
 
+// computeIdentitySquare returns the side of the central all-2 square of the
+// identity on an n×n grid, and the identity itself.
+func computeIdentitySquare(n int) (int, *grid) {
+	twoM := newGrid(n)
+	twoM.fill(6)
+	twoM.stabilize()
+	e := newGrid(n)
+	for i := range e.c {
+		e.c[i] = 6 - twoM.c[i]
+	}
+	e.stabilize()
+	return centralTwoSquare(e), e
+}
+
+func centralTwoSquare(e *grid) int {
+	n := e.n
+	side := 0
+	if n%2 == 1 {
+		// Odd n: the identity has a cross of 1s through the centre (0 at the
+		// centre cell), so measure the all-2 square of the NE quadrant block
+		// starting right after the cross, and report its side ×2+1 (the
+		// span across the cross) for comparability with even n.
+		c := n / 2
+		q := 0
+		for r := 1; c+r < n; r++ {
+			ok := true
+			for y := c + 1; y <= c+r && ok; y++ {
+				for x := c + 1; x <= c+r; x++ {
+					if e.c[y*n+x] != 2 {
+						ok = false
+						break
+					}
+				}
+			}
+			if !ok {
+				break
+			}
+			q = r
+		}
+		return 2*q + 1
+	}
+	for r := 0; ; r++ {
+		lo, hi := n/2-r-1, n/2+r
+		if n%2 == 1 {
+			lo, hi = n/2-r, n/2+r
+		}
+		if lo < 0 || hi >= n {
+			break
+		}
+		ok := true
+		for y := lo; y <= hi && ok; y++ {
+			for x := lo; x <= hi; x++ {
+				if e.c[y*n+x] != 2 {
+					ok = false
+					break
+				}
+			}
+		}
+		if !ok {
+			break
+		}
+		side = hi - lo + 1
+	}
+	return side
+}
+
 func main() {
 	n := flag.Int("n", 400, "grid side length")
 	out := flag.String("out", "identity.png", "output PNG")
 	scale := flag.Int("scale", 2, "pixels per cell")
+	quiet := flag.Bool("quiet", false, "only print one summary line, write no PNG")
+	center := flag.Int("center", 0, "print the k×k centre of the identity and exit")
 	flag.Parse()
+
+	if *center > 0 {
+		_, e := computeIdentitySquare(*n)
+		k := *center
+		lo := *n/2 - k/2
+		for y := lo; y < lo+k; y++ {
+			for x := lo; x < lo+k; x++ {
+				fmt.Printf("%d ", e.c[y**n+x])
+			}
+			fmt.Println()
+		}
+		return
+	}
+
+	if *quiet {
+		side, _ := computeIdentitySquare(*n)
+		fmt.Printf("%d %d %.4f\n", *n, side, float64(side)/float64(*n))
+		return
+	}
 
 	start := time.Now()
 
